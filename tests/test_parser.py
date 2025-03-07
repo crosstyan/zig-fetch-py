@@ -13,10 +13,16 @@ class TestZonParser:
     """Test cases for the ZonParser class."""
 
     def test_parse_empty_object(self):
-        """Test parsing an empty object."""
-        parser = ZonParser(".{}")
+        """Test parsing an empty object with empty_tuple_as_dict=True."""
+        parser = ZonParser(".{}", empty_tuple_as_dict=True)
         result = parser.parse()
         assert result == {}
+
+    def test_parse_empty_tuple_as_list(self):
+        """Test parsing an empty tuple as list with empty_tuple_as_dict=False."""
+        parser = ZonParser(".{}", empty_tuple_as_dict=False)
+        result = parser.parse()
+        assert result == []
 
     def test_parse_simple_object(self):
         """Test parsing a simple object with string values."""
@@ -41,16 +47,6 @@ class TestZonParser:
         )
         result = parser.parse()
         assert result == {"metadata": {"name": "test", "version": "1.0.0"}}
-
-    def test_parse_array(self):
-        """Test parsing an array."""
-        parser = ZonParser(
-            """.{
-            .tags = .["tag1", "tag2", "tag3"],
-        }"""
-        )
-        result = parser.parse()
-        assert result == {"tags": ["tag1", "tag2", "tag3"]}
 
     def test_parse_numbers(self):
         """Test parsing different number formats."""
@@ -168,6 +164,65 @@ class TestZonParser:
             "empty_tuple": [""],
             "mixed_tuple": [1, "two", True],
         }
+
+    def test_parse_nested_tuples(self):
+        """Test parsing nested tuples."""
+        parser = ZonParser(
+            """.{
+            .nested_tuple = .{ .{1, 2}, .{3, 4} },
+        }"""
+        )
+        result = parser.parse()
+        assert result == {"nested_tuple": [[1, 2], [3, 4]]}
+
+    def test_parse_objects_in_tuple(self):
+        """Test parsing objects within tuples."""
+        parser = ZonParser(
+            """.{
+            .object_in_tuple = .{ .{.x = 1, .y = 2}, .{.x = 3, .y = 4} },
+        }"""
+        )
+        result = parser.parse()
+        assert result == {"object_in_tuple": [{"x": 1, "y": 2}, {"x": 3, "y": 4}]}
+
+    def test_parse_complex_nested_structures(self):
+        """Test parsing complex nested structures."""
+        parser = ZonParser(
+            """.{
+            .metadata = .{
+                .name = "example",
+                .version = "1.0.0",
+            },
+            .simple_tuple = .{1, 2, 3},
+            .nested = .{
+                .tuple_in_object = .{4, 5, 6},
+                .object_in_tuple = .{ .{.x = 1, .y = 2}, .{.x = 3, .y = 4} },
+            },
+            .nested_tuple = .{ .{1, 2}, .{3, 4} },
+            .empty = .{},
+        }"""
+        )
+        result = parser.parse()
+        assert result == {
+            "metadata": {"name": "example", "version": "1.0.0"},
+            "simple_tuple": [1, 2, 3],
+            "nested": {
+                "tuple_in_object": [4, 5, 6],
+                "object_in_tuple": [{"x": 1, "y": 2}, {"x": 3, "y": 4}],
+            },
+            "nested_tuple": [[1, 2], [3, 4]],
+            "empty": [],
+        }
+
+    def test_parse_tuple_as_array(self):
+        """Test parsing a tuple as an array."""
+        parser = ZonParser(
+            """.{
+            .tags = .{"tag1", "tag2", "tag3"},
+        }"""
+        )
+        result = parser.parse()
+        assert result == {"tags": ["tag1", "tag2", "tag3"]}
 
 
 class TestZonFileParser:

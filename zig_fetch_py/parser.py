@@ -14,17 +14,20 @@ class ZonParser:
     A parser for Zig Object Notation (ZON) files.
     """
 
-    def __init__(self, content: str):
+    def __init__(self, content: str, empty_tuple_as_dict: bool = False):
         """
         Initialize the parser with ZON content.
 
         Args:
             content: The ZON content to parse
+            empty_tuple_as_dict: If True, empty tuples (.{}) will be parsed as empty dictionaries ({})
+                               If False, empty tuples will be parsed as empty lists ([])
         """
         self.content = content
         self.pos = 0
         self.line = 1
         self.col = 1
+        self.empty_tuple_as_dict = empty_tuple_as_dict
 
     def parse(self) -> Dict[str, Any]:
         """Parse ZON content and return a Python dictionary."""
@@ -71,6 +74,7 @@ class ZonParser:
             break
 
     def _parse_value(self) -> Any:
+        """Parse a ZON value."""
         self._skip_whitespace_and_comments()
 
         char = self._current_char()
@@ -100,33 +104,59 @@ class ZonParser:
             )
 
     def _parse_object(self) -> Union[Dict[str, Any], List[Any]]:
-        """Parse a ZON object (anonymous struct) or tuple."""
+        """Parse a ZON object or tuple."""
         # Skip the opening brace
         self._next_char()
 
-        # Check if it's a tuple (values separated by commas without keys)
-        is_tuple = False
-        pos_before_check = self.pos
-        line_before_check = self.line
-        col_before_check = self.col
+        # Look ahead to see if this is a tuple or an object
+        pos_before = self.pos
+        line_before = self.line
+        col_before = self.col
 
-        # Look ahead to see if this is a tuple
         self._skip_whitespace_and_comments()
-        if self._current_char() != ".":
-            # If it doesn't start with a dot for a key, it might be a tuple
-            # or an empty object
-            if self._current_char() != "}":
-                is_tuple = True
 
-        # Reset position after look-ahead
-        self.pos = pos_before_check
-        self.line = line_before_check
-        self.col = col_before_check
+        # Check if it's empty
+        if self._current_char() == "}":
+            # Need to determine if it should be an empty object or empty tuple
+            # Use the configuration option to decide
+            self._next_char()  # Skip the closing brace
+            return (
+                {} if self.empty_tuple_as_dict else []
+            )  # Empty dict or list based on config
+
+        # Look at the first character to determine if it's a tuple or object
+        is_tuple = True
+        if self._current_char() == ".":
+            # Look ahead one more character
+            self._next_char()
+            # If the next character is an object, it could be a nested tuple
+            if self._current_char() == "{":
+                # This is potentially a nested tuple starting with .{
+                # Go back to the dot and let the normal parsing decide
+                self.pos -= 1
+            elif (
+                self._current_char() == "@"
+                or self._current_char().isalnum()
+                or self._current_char() == "_"
+            ):
+                # This looks like a field name, so it's probably an object
+                is_tuple = False
+            else:
+                # Unexpected character after dot, could be a syntax error
+                is_tuple = False
+
+        # Reset position
+        self.pos = pos_before
+        self.line = line_before
+        self.col = col_before
 
         if is_tuple:
             return self._parse_tuple()
+        else:
+            return self._parse_struct()
 
-        # Regular object parsing
+    def _parse_struct(self) -> Dict[str, Any]:
+        """Parse a ZON struct/object with key-value pairs."""
         result = {}
 
         while True:
@@ -171,9 +201,24 @@ class ZonParser:
 
         return result
 
-    def _parse_tuple(self) -> List[Any]:
-        """Parse a tuple in ZON format."""
+    def _parse_tuple(self) -> Union[Dict[str, Any], List[Any]]:
+        """
+        Parse a ZON tuple as a list of values or empty dict based on configuration.
+
+        Returns:
+            List[Any] for non-empty tuples, or Dict[str, Any] if empty and empty_tuple_as_dict=True
+        """
         result = []
+
+        # Skip the opening brace (already done in _parse_object)
+        self._skip_whitespace_and_comments()
+
+        # Check for empty tuple
+        if self._current_char() == "}":
+            self._next_char()
+            return (
+                {} if self.empty_tuple_as_dict else []
+            )  # Empty dict or list based on config
 
         while True:
             self._skip_whitespace_and_comments()
@@ -183,17 +228,27 @@ class ZonParser:
                 self._next_char()
                 break
 
-            # Check for nested tuple or object with dot prefix
+            # Handle the special case of nested tuple/object with dot prefix
             if self._current_char() == ".":
+                # Save position before the dot
+                pos_before = self.pos
+                line_before = self.line
+                col_before = self.col
+
                 self._next_char()  # Skip the dot
 
-                # Check if it's a nested object or tuple
+                # If we have a nested object/tuple
                 if self._current_char() == "{":
+                    # Parse the nested object/tuple
                     value = self._parse_object()
                     result.append(value)
                 else:
-                    # It's a field name or a special value
-                    self.pos -= 1  # Move back to include the dot
+                    # Not a nested tuple/object, reset position and parse normally
+                    self.pos = pos_before
+                    self.line = line_before
+                    self.col = col_before
+
+                    # Parse as normal value
                     value = self._parse_value()
                     result.append(value)
             else:
@@ -346,12 +401,14 @@ class ZonParser:
             )
 
 
-def parse_zon_file(file_path: str) -> Dict[str, Any]:
+def parse_zon_file(file_path: str, empty_tuple_as_dict: bool = False) -> Dict[str, Any]:
     """
     Parse a ZON file and return a Python dictionary.
 
     Args:
         file_path: Path to the ZON file
+        empty_tuple_as_dict: If True, empty tuples (.{}) will be parsed as empty dictionaries ({})
+                           If False, empty tuples will be parsed as empty lists ([])
 
     Returns:
         Dictionary representation of the ZON file
@@ -360,23 +417,27 @@ def parse_zon_file(file_path: str) -> Dict[str, Any]:
     with open(file_path, "r") as f:
         content = f.read()
 
-    parser = ZonParser(content)
+    parser = ZonParser(content, empty_tuple_as_dict=empty_tuple_as_dict)
     result = parser.parse()
     logger.debug(f"Successfully parsed ZON file")
     return result
 
 
-def zon_to_json(zon_content: str, indent: Optional[int] = None) -> str:
+def zon_to_json(
+    zon_content: str, indent: Optional[int] = None, empty_tuple_as_dict: bool = False
+) -> str:
     """
     Convert ZON content to JSON string.
 
     Args:
         zon_content: ZON content as string
         indent: Number of spaces for indentation (None for compact JSON)
+        empty_tuple_as_dict: If True, empty tuples (.{}) will be parsed as empty dictionaries ({})
+                           If False, empty tuples will be parsed as empty lists ([])
 
     Returns:
         JSON string
     """
-    parser = ZonParser(zon_content)
+    parser = ZonParser(zon_content, empty_tuple_as_dict=empty_tuple_as_dict)
     result = parser.parse()
     return json.dumps(result, indent=indent)
