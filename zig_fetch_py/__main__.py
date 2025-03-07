@@ -4,6 +4,7 @@ Command-line interface for zig-fetch-py.
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 import click
 from loguru import logger
@@ -22,6 +23,54 @@ def setup_logger(verbose: bool = False):
     logger.remove()
     log_level = "DEBUG" if verbose else "INFO"
     logger.add(sys.stderr, level=log_level)
+
+
+def convert_zon_to_json(
+    zon_file: Path,
+    output: Optional[Path] = None,
+    indent: int = 2,
+    empty_tuple_as_dict: bool = False,
+    verbose: bool = False,
+):
+    """
+    Convert a ZON file to JSON.
+
+    Args:
+        zon_file: Path to the ZON file
+        output: Output file (default: stdout)
+        indent: Indentation for the JSON output
+        empty_tuple_as_dict: Parse empty tuples as empty dictionaries
+        verbose: Enable verbose logging
+    """
+    # Set up logging
+    setup_logger(verbose)
+
+    try:
+        # Read the ZON file
+        with open(zon_file, "r", encoding="utf-8") as f:
+            zon_content = f.read()
+
+        # Convert to JSON
+        json_content = zon_to_json(
+            zon_content, indent=indent, empty_tuple_as_dict=empty_tuple_as_dict
+        )
+
+        # Output the JSON
+        if output:
+            with open(output, "w", encoding="utf-8") as f:
+                f.write(json_content)
+            logger.info(f"JSON written to {output}")
+            return json_content
+        else:
+            click.echo(json_content)
+            return json_content
+
+    except FileNotFoundError:
+        logger.error(f"File not found: {zon_file}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        sys.exit(1)
 
 
 @click.group()
@@ -77,7 +126,7 @@ def download(ctx: click.Context, zon_file: Path):
 def convert(
     ctx: click.Context,
     zon_file: Path,
-    output: Path,
+    output: Optional[Path],
     indent: int,
     empty_tuple_as_dict: bool,
 ):
@@ -86,34 +135,51 @@ def convert(
 
     ZON_FILE: Path to the ZON file to convert
     """
-    try:
-        # Read the ZON file
-        with open(zon_file, "r") as f:
-            zon_content = f.read()
+    # Use the shared convert function
+    convert_zon_to_json(
+        zon_file=zon_file,
+        output=output,
+        indent=indent,
+        empty_tuple_as_dict=empty_tuple_as_dict,
+        verbose=ctx.obj.get("VERBOSE", False),
+    )
 
-        # Convert to JSON
-        json_content = zon_to_json(
-            zon_content, indent=indent, empty_tuple_as_dict=empty_tuple_as_dict
-        )
 
-        # Output the JSON
-        if output:
-            with open(output, "w") as f:
-                f.write(json_content)
-            logger.info(f"JSON written to {output}")
-        else:
-            click.echo(json_content)
+@click.command()
+@click.argument("zon_file", type=click.Path(exists=True, readable=True, path_type=Path))
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(writable=True, path_type=Path),
+    help="Output file (default: stdout)",
+)
+@click.option(
+    "-i", "--indent", type=int, default=2, help="Indentation for the JSON output"
+)
+@click.option(
+    "--empty-tuple-as-dict",
+    is_flag=True,
+    help="Parse empty tuples as empty dictionaries",
+)
+@click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging")
+def zon2json(zon_file, output, indent, empty_tuple_as_dict, verbose):
+    """
+    Convert a ZON file to JSON.
 
-    except FileNotFoundError:
-        logger.error(f"File not found: {zon_file}")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        sys.exit(1)
+    ZON_FILE: Path to the ZON file to convert
+    """
+    # Use the shared convert function
+    convert_zon_to_json(
+        zon_file=zon_file,
+        output=output,
+        indent=indent,
+        empty_tuple_as_dict=empty_tuple_as_dict,
+        verbose=verbose,
+    )
 
 
 def main():
-    """Entry point for the CLI."""
+    """Entry point for the zig-fetch CLI."""
     cli()  # pylint: disable=no-value-for-parameter
 
 

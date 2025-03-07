@@ -62,7 +62,7 @@ The package provides a command-line interface with the following commands:
 Download and extract dependencies from a ZON file:
 
 ```bash
-zig-fetch download examples/test.zon
+uv run zig-fetch download examples/test.zon
 ```
 
 This will download all dependencies specified in the ZON file to `~/.cache/zig/p` and extract them to directories named after their hash values.
@@ -72,13 +72,7 @@ This will download all dependencies specified in the ZON file to `~/.cache/zig/p
 Convert a ZON file to JSON:
 
 ```bash
-zig-fetch convert examples/test.zon
-```
-
-Or use the dedicated command:
-
-```bash
-zon2json examples/test.zon
+uv run zig-fetch convert examples/test.zon
 ```
 
 Options:

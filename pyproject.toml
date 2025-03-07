@@ -13,8 +13,8 @@ dependencies = [
 license = "WTFPL"
 
 [project.scripts]
-zon2json = "zig_fetch_py.main:main"
 zig-fetch = "zig_fetch_py.__main__:main"
+zon2json = "zig_fetch_py.__main__:zon2json"
 
 [build-system]
 requires = ["hatchling"]
