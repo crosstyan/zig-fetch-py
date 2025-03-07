@@ -3,8 +3,7 @@ ZON parser module - Parses Zig Object Notation (ZON) files.
 """
 
 import json
-from pathlib import Path
-from typing import Any, Dict, List, Union, Tuple, Optional
+from typing import Any, Dict, List, Union, Optional
 
 from loguru import logger
 

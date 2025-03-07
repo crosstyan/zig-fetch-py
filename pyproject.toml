@@ -4,10 +4,17 @@ version = "0.1.0"
 description = "A tool to parse Zig Object Notation (ZON) files and convert them to JSON"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["click>=8.1.8", "loguru>=0.7.3"]
+dependencies = [
+    "click>=8.1.8",
+    "httpx>=0.28.1",
+    "loguru>=0.7.3",
+    "tqdm>=4.67.1",
+]
+license = "WTFPL"
 
 [project.scripts]
 zon2json = "zig_fetch_py.main:main"
+zig-fetch = "zig_fetch_py.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -1,16 +1,26 @@
 # zig-fetch-py
 
-A Python tool to parse Zig Object Notation (ZON) files and convert them to JSON.
+A Python utility for working with Zig package manager files and Zig Object Notation (ZON).
+
+## Features
+
+- Parse ZON files into Python dictionaries
+- Convert ZON files to JSON
+- Download and extract dependencies from ZON files
 
 ## Installation
 
 ### Using uv (recommended)
 
-[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver. To install zig-fetch-py using uv:
+[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver.
 
 ```bash
 # Install uv if you don't have it
 curl -sSf https://astral.sh/uv/install.sh | bash
+
+# Clone the repository
+git clone https://github.com/yourusername/zig-fetch-py.git
+cd zig-fetch-py
 
 # Create and activate a virtual environment
 uv venv
@@ -26,7 +36,11 @@ uv pip install -e ".[dev]"
 ### Using pip
 
 ```bash
-# Create and activate a virtual environment
+# Clone the repository
+git clone https://github.com/yourusername/zig-fetch-py.git
+cd zig-fetch-py
+
+# Create a virtual environment
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
@@ -39,84 +53,85 @@ pip install -e ".[dev]"
 
 ## Usage
 
-### Command Line
+### Command Line Interface
+
+The package provides a command-line interface with the following commands:
+
+#### Download Dependencies
+
+Download and extract dependencies from a ZON file:
 
 ```bash
-# Basic usage
-zon2json path/to/file.zon
-
-# Output to a file
-zon2json path/to/file.zon -o output.json
-
-# Pretty print the JSON
-zon2json path/to/file.zon -p
-
-# Enable verbose logging
-zon2json path/to/file.zon -v
+zig-fetch download examples/test.zon
 ```
+
+This will download all dependencies specified in the ZON file to `~/.cache/zig/p` and extract them to directories named after their hash values.
+
+#### Convert ZON to JSON
+
+Convert a ZON file to JSON:
+
+```bash
+zig-fetch convert examples/test.zon
+```
+
+Or use the dedicated command:
+
+```bash
+zon2json examples/test.zon
+```
+
+Options:
+- `--indent N`, `-i N`: Set the indentation level for the JSON output (default: 2)
+- `--output PATH`, `-o PATH`: Output file (default: stdout)
+- `--empty-tuple-as-dict`: Parse empty tuples (`.{}`) as empty dictionaries (`{}`) instead of empty lists (`[]`)
+- `--verbose`, `-v`: Enable verbose logging
 
 ### Python API
 
+You can also use the package as a Python library:
+
 ```python
 from zig_fetch_py.parser import parse_zon_file, zon_to_json
+from zig_fetch_py.downloader import process_dependencies
 
 # Parse a ZON file
-result = parse_zon_file("path/to/file.zon")
-print(result)  # Python dictionary
+zon_data = parse_zon_file("examples/test.zon")
 
-# Convert ZON content to JSON
-zon_content = """.{
-    .name = "test",
-    .version = "1.0.0",
-}"""
-json_str = zon_to_json(zon_content, indent=4)
-print(json_str)
+# Convert ZON to JSON
+json_str = zon_to_json(zon_content, indent=2)
+
+# Download dependencies
+dependencies = process_dependencies("examples/test.zon")
 ```
 
-## Development
+## ZON Parser Options
 
-### Running Tests
+The ZON parser supports the following options:
 
-```bash
-# Run all tests
-pytest
+- `empty_tuple_as_dict`: If True, empty tuples (`.{}`) will be parsed as empty dictionaries (`{}`) instead of empty lists (`[]`)
 
-# Run tests with coverage
-pytest --cov=zig_fetch_py
+## Trivia
 
-# Generate coverage report
-pytest --cov=zig_fetch_py --cov-report=html
-```
+Cursor (powered by Claude 3.7) help me do almost all of the heavy lifting. I
+can't even write a proper parser by my own.
 
-## ZON Format
-
-Zig Object Notation (ZON) is a data format used by the Zig programming language. It's similar to JSON but with some differences in syntax:
-
-- Objects (anonymous structs) are defined with `.{ .key = value, ... }`
-- Keys are prefixed with a dot: `.key = value`
-- Tuples are defined with `.{value1, value2, ...}` and are parsed as arrays in JSON
-- Special identifiers can be quoted with `@`: `.@"special-name" = value`
-- Comments use `//` syntax
-
-Note: ZON doesn't have a dedicated array syntax like JSON's `[]`. Instead, tuples (`.{value1, value2, ...}`) serve a similar purpose and are converted to arrays in JSON.
-
-Example:
-
-```zon
-.{
-    .name = "example",
-    .version = "1.0.0",
-    .dependencies = .{
-        .lib1 = .{
-            .url = "https://example.com/lib1.tar.gz",
-            .hash = "abcdef123456",
-        },
-    },
-    .tags = .{1, 2, 3},     // Tuple (parsed as array in JSON)
-    .paths = .{""},         // Single-item tuple
-}
-```
+The motivation of it is this issue ([add http/socks5 proxy support for package manager](https://github.com/ziglang/zig/issues/15048)).
+Until proper proxy support is added to zig, I'll maintain this repo. (The Zon parser might be useful for other projects though)
 
 ## License
 
-MIT
+```
+            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+                    Version 2, December 2004
+
+ Copyright (C) 2024 <crosstyan@outlook.com>
+
+ Everyone is permitted to copy and distribute verbatim or modified
+ copies of this license document, and changing it is allowed as long
+ as the name is changed.
+
+            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+  0. You just DO WHAT THE FUCK YOU WANT TO.

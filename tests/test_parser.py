@@ -4,7 +4,6 @@ Unit tests for the ZON parser.
 
 import json
 import pytest
-from pathlib import Path
 
 from zig_fetch_py.parser import ZonParser, parse_zon_file, zon_to_json
 
