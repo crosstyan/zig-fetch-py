@@ -1,39 +1,119 @@
+# zig-fetch-py
+
+A Python tool to parse Zig Object Notation (ZON) files and convert them to JSON.
+
+## Installation
+
+### Using uv (recommended)
+
+[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver. To install zig-fetch-py using uv:
+
+```bash
+# Install uv if you don't have it
+curl -sSf https://astral.sh/uv/install.sh | bash
+
+# Create and activate a virtual environment
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the package in development mode
+uv pip install -e .
+
+# Install development dependencies
+uv pip install -e ".[dev]"
+```
+
+### Using pip
+
+```bash
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the package in development mode
+pip install -e .
+
+# Install development dependencies
+pip install -e ".[dev]"
+```
+
+## Usage
+
+### Command Line
+
+```bash
+# Basic usage
+zon2json path/to/file.zon
+
+# Output to a file
+zon2json path/to/file.zon -o output.json
+
+# Pretty print the JSON
+zon2json path/to/file.zon -p
+
+# Enable verbose logging
+zon2json path/to/file.zon -v
+```
+
+### Python API
+
+```python
+from zig_fetch_py.parser import parse_zon_file, zon_to_json
+
+# Parse a ZON file
+result = parse_zon_file("path/to/file.zon")
+print(result)  # Python dictionary
+
+# Convert ZON content to JSON
+zon_content = """.{
+    .name = "test",
+    .version = "1.0.0",
+}"""
+json_str = zon_to_json(zon_content, indent=4)
+print(json_str)
+```
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run tests with coverage
+pytest --cov=zig_fetch_py
+
+# Generate coverage report
+pytest --cov=zig_fetch_py --cov-report=html
+```
+
+## ZON Format
+
+Zig Object Notation (ZON) is a data format used by the Zig programming language. It's similar to JSON but with some differences in syntax:
+
+- Objects are defined with `.{ ... }`
+- Keys are prefixed with a dot: `.key = value`
+- Arrays are defined with `.[ ... ]`
+- Special identifiers can be quoted with `@`: `.@"special-name" = value`
+- Comments use `//` syntax
+
+Example:
+
 ```zon
 .{
-    .name = .zls,
-    // Must match the `zls_version` in `build.zig`
-    .version = "0.15.0-dev",
-    // Must be kept in line with the `minimum_build_zig_version` in `build.zig`.
-    // Should be a Zig version that is downloadable from https://ziglang.org/download/ or a mirror.
-    .minimum_zig_version = "0.14.0",
-    // If you do not use Nix, a ZLS maintainer can take care of this.
-    // Whenever the dependencies are updated, run the following command:
-    // ```bash
-    // nix run github:Cloudef/zig2nix#zon2nix -- build.zig.zon > deps.nix
-    // rm build.zig.zon2json-lock # this file is unnecessary
-    // ```
+    .name = "example",
+    .version = "1.0.0",
     .dependencies = .{
-        .known_folders = .{
-            .url = "https://github.com/ziglibs/known-folders/archive/aa24df42183ad415d10bc0a33e6238c437fc0f59.tar.gz",
-            .hash = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL",
-        },
-        .diffz = .{
-            .url = "https://github.com/ziglibs/diffz/archive/ef45c00d655e5e40faf35afbbde81a1fa5ed7ffb.tar.gz",
-            .hash = "N-V-__8AABhrAQAQLLLGadghhPsdxTgBk9N9aLVOjXW3ay0V",
-        },
-        .@"lsp-codegen" = .{
-            .url = "https://github.com/zigtools/zig-lsp-codegen/archive/063a98c13a2293d8654086140813bdd1de6501bc.tar.gz",
-            .hash = "lsp_codegen-0.1.0-CMjjo0ZXCQB-rAhPYrlfzzpU0u0u2MeGvUucZ-_g32eg",
-        },
-        .tracy = .{
-            .url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.11.1.tar.gz",
-            .hash = "N-V-__8AAMeOlQEipHjcyu0TCftdAi9AQe7EXUDJOoVe0k-t",
-            .lazy = true,
+        .lib1 = .{
+            .url = "https://example.com/lib1.tar.gz",
+            .hash = "abcdef123456",
         },
     },
-    .paths = .{""},
-    .fingerprint = 0xa66330b97eb969ae, // Changing this has security and trust implications.
+    .tags = .["tag1", "tag2"],
 }
 ```
 
-It's called `zon`, the Zig Object Notation. I think You need to parse it first (convert to json) and then parse the json.
+## License
+
+MIT

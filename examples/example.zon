@@ -1,0 +1,11 @@
+.{
+    .name = "example",
+    .version = "1.0.0",
+    .dependencies = .{
+        .lib1 = .{
+            .url = "https://example.com/lib1.tar.gz",
+            .hash = "abcdef123456",
+        },
+    },
+    .tags = .["tag1", "tag2"],
+}

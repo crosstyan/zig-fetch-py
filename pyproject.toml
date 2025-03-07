@@ -4,10 +4,7 @@ version = "0.1.0"
 description = "A tool to parse Zig Object Notation (ZON) files and convert them to JSON"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "click>=8.1.8",
-    "loguru>=0.7.3",
-]
+dependencies = ["click>=8.1.8", "loguru>=0.7.3"]
 
 [project.scripts]
 zon2json = "zig_fetch_py.main:main"
@@ -19,5 +16,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["zig_fetch_py"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test*"
+
 [tool.ruff]
 line-length = 100
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3.5", "pytest-cov>=6.0.0"]

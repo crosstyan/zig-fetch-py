@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
-import json
-import re
-import sys
-from pathlib import Path
-from typing import Any, Dict, List, Union, Tuple
+"""
+ZON parser module - Parses Zig Object Notation (ZON) files.
+"""
 
-import click
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Union, Tuple, Optional
+
 from loguru import logger
 
 
@@ -14,12 +14,13 @@ class ZonParser:
     A parser for Zig Object Notation (ZON) files.
     """
 
-    content: str
-    pos: int
-    line: int
-    col: int
-
     def __init__(self, content: str):
+        """
+        Initialize the parser with ZON content.
+
+        Args:
+            content: The ZON content to parse
+        """
         self.content = content
         self.pos = 0
         self.line = 1
@@ -314,7 +315,15 @@ class ZonParser:
 
 
 def parse_zon_file(file_path: str) -> Dict[str, Any]:
-    """Parse a ZON file and return a Python dictionary."""
+    """
+    Parse a ZON file and return a Python dictionary.
+
+    Args:
+        file_path: Path to the ZON file
+
+    Returns:
+        Dictionary representation of the ZON file
+    """
     logger.debug(f"Parsing ZON file: {file_path}")
     with open(file_path, "r") as f:
         content = f.read()
@@ -325,46 +334,17 @@ def parse_zon_file(file_path: str) -> Dict[str, Any]:
     return result
 
 
-@click.command()
-@click.argument("file", type=click.Path(exists=True, readable=True))
-@click.option(
-    "-o",
-    "--output",
-    type=click.Path(writable=True),
-    help="Output JSON file path (default: stdout)",
-)
-@click.option("-p", "--pretty", is_flag=True, help="Pretty print JSON output")
-@click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging")
-def main(file, output, pretty, verbose):
-    """Parse ZON files and convert to JSON.
-
-    This tool parses Zig Object Notation (ZON) files and converts them to JSON format.
+def zon_to_json(zon_content: str, indent: Optional[int] = None) -> str:
     """
-    # Configure logging
-    log_level = "DEBUG" if verbose else "INFO"
-    logger.remove()  # Remove default handler
-    logger.add(sys.stderr, level=log_level)
+    Convert ZON content to JSON string.
 
-    logger.info(f"Processing file: {file}")
+    Args:
+        zon_content: ZON content as string
+        indent: Number of spaces for indentation (None for compact JSON)
 
-    try:
-        result = parse_zon_file(file)
-
-        indent = 4 if pretty else None
-        json_str = json.dumps(result, indent=indent)
-
-        if output:
-            logger.info(f"Writing output to: {output}")
-            with open(output, "w") as f:
-                f.write(json_str)
-        else:
-            logger.debug("Writing output to stdout")
-            click.echo(json_str)
-
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()  # pylint: disable=no-value-for-parameter
+    Returns:
+        JSON string
+    """
+    parser = ZonParser(zon_content)
+    result = parser.parse()
+    return json.dumps(result, indent=indent)
