@@ -14,6 +14,12 @@ class ZonParser:
     A parser for Zig Object Notation (ZON) files.
     """
 
+    _content: str
+    _pos: int
+    _line: int
+    _col: int
+    empty_tuple_as_dict: bool = False
+
     def __init__(self, content: str, empty_tuple_as_dict: bool = False):
         """
         Initialize the parser with ZON content.
@@ -23,10 +29,10 @@ class ZonParser:
             empty_tuple_as_dict: If True, empty tuples (.{}) will be parsed as empty dictionaries ({})
                                If False, empty tuples will be parsed as empty lists ([])
         """
-        self.content = content
-        self.pos = 0
-        self.line = 1
-        self.col = 1
+        self._content = content
+        self._pos = 0
+        self._line = 1
+        self._col = 1
         self.empty_tuple_as_dict = empty_tuple_as_dict
 
     def parse(self) -> Dict[str, Any]:
@@ -35,24 +41,24 @@ class ZonParser:
         return result
 
     def _current_char(self) -> str:
-        if self.pos >= len(self.content):
+        if self._pos >= len(self._content):
             return ""
-        return self.content[self.pos]
+        return self._content[self._pos]
 
     def _next_char(self) -> str:
-        self.pos += 1
-        if self.pos - 1 < len(self.content):
-            char = self.content[self.pos - 1]
+        self._pos += 1
+        if self._pos - 1 < len(self._content):
+            char = self._content[self._pos - 1]
             if char == "\n":
-                self.line += 1
-                self.col = 1
+                self._line += 1
+                self._col = 1
             else:
-                self.col += 1
+                self._col += 1
             return char
         return ""
 
     def _skip_whitespace_and_comments(self):
-        while self.pos < len(self.content):
+        while self._pos < len(self._content):
             char = self._current_char()
 
             # Skip whitespace
@@ -63,11 +69,11 @@ class ZonParser:
             # Skip comments
             if (
                 char == "/"
-                and self.pos + 1 < len(self.content)
-                and self.content[self.pos + 1] == "/"
+                and self._pos + 1 < len(self._content)
+                and self._content[self._pos + 1] == "/"
             ):
                 # Skip to end of line
-                while self.pos < len(self.content) and self._current_char() != "\n":
+                while self._pos < len(self._content) and self._current_char() != "\n":
                     self._next_char()
                 continue
 
@@ -95,12 +101,12 @@ class ZonParser:
             return self._parse_number()
         elif char == "t" or char == "f":
             return self._parse_boolean()
-        elif char == "n" and self.content[self.pos : self.pos + 4] == "null":
-            self.pos += 4
+        elif char == "n" and self._content[self._pos : self._pos + 4] == "null":
+            self._pos += 4
             return None
         else:
             raise ValueError(
-                f"Unexpected character '{char}' at line {self.line}, column {self.col}"
+                f"Unexpected character '{char}' at line {self._line}, column {self._col}"
             )
 
     def _parse_object(self) -> Union[Dict[str, Any], List[Any]]:
@@ -109,9 +115,9 @@ class ZonParser:
         self._next_char()
 
         # Look ahead to see if this is a tuple or an object
-        pos_before = self.pos
-        line_before = self.line
-        col_before = self.col
+        pos_before = self._pos
+        line_before = self._line
+        col_before = self._col
 
         self._skip_whitespace_and_comments()
 
@@ -133,7 +139,7 @@ class ZonParser:
             if self._current_char() == "{":
                 # This is potentially a nested tuple starting with .{
                 # Go back to the dot and let the normal parsing decide
-                self.pos -= 1
+                self._pos -= 1
             elif (
                 self._current_char() == "@"
                 or self._current_char().isalnum()
@@ -146,9 +152,9 @@ class ZonParser:
                 is_tuple = False
 
         # Reset position
-        self.pos = pos_before
-        self.line = line_before
-        self.col = col_before
+        self._pos = pos_before
+        self._line = line_before
+        self._col = col_before
 
         if is_tuple:
             return self._parse_tuple()
@@ -173,7 +179,7 @@ class ZonParser:
                 key = self._parse_identifier()
             else:
                 raise ValueError(
-                    f"Expected '.' before key at line {self.line}, column {self.col}"
+                    f"Expected '.' before key at line {self._line}, column {self._col}"
                 )
 
             self._skip_whitespace_and_comments()
@@ -196,7 +202,7 @@ class ZonParser:
                 self._next_char()
             elif self._current_char() != "}":
                 raise ValueError(
-                    f"Expected ',' or '}}' at line {self.line}, column {self.col}"
+                    f"Expected ',' or '}}' at line {self._line}, column {self._col}"
                 )
 
         return result
@@ -231,9 +237,9 @@ class ZonParser:
             # Handle the special case of nested tuple/object with dot prefix
             if self._current_char() == ".":
                 # Save position before the dot
-                pos_before = self.pos
-                line_before = self.line
-                col_before = self.col
+                pos_before = self._pos
+                line_before = self._line
+                col_before = self._col
 
                 self._next_char()  # Skip the dot
 
@@ -244,9 +250,9 @@ class ZonParser:
                     result.append(value)
                 else:
                     # Not a nested tuple/object, reset position and parse normally
-                    self.pos = pos_before
-                    self.line = line_before
-                    self.col = col_before
+                    self._pos = pos_before
+                    self._line = line_before
+                    self._col = col_before
 
                     # Parse as normal value
                     value = self._parse_value()
@@ -263,35 +269,37 @@ class ZonParser:
                 self._next_char()
             elif self._current_char() != "}":
                 raise ValueError(
-                    f"Expected ',' or '}}' at line {self.line}, column {self.col}"
+                    f"Expected ',' or '}}' at line {self._line}, column {self._col}"
                 )
 
         return result
 
     def _parse_identifier(self) -> str:
-        start = self.pos
+        start = self._pos
 
         # Handle quoted identifiers (like .@"lsp-codegen")
         if (
             self._current_char() == "@"
-            and self.pos + 1 < len(self.content)
-            and self.content[self.pos + 1] == '"'
+            and self._pos + 1 < len(self._content)
+            and self._content[self._pos + 1] == '"'
         ):
             self._next_char()  # Skip @
             return self._parse_string()
 
         # Regular identifier
-        while self.pos < len(self.content):
+        while self._pos < len(self._content):
             char = self._current_char()
             if char.isalnum() or char == "_" or char == "-":
                 self._next_char()
             else:
                 break
 
-        if start == self.pos:
-            raise ValueError(f"Empty identifier at line {self.line}, column {self.col}")
+        if start == self._pos:
+            raise ValueError(
+                f"Empty identifier at line {self._line}, column {self._col}"
+            )
 
-        return self.content[start : self.pos]
+        return self._content[start : self._pos]
 
     def _parse_string(self) -> str:
         result = ""
@@ -299,7 +307,7 @@ class ZonParser:
         # Skip the opening quote
         self._next_char()
 
-        while self.pos < len(self.content) and self._current_char() != '"':
+        while self._pos < len(self._content) and self._current_char() != '"':
             if self._current_char() == "\\":
                 self._next_char()
                 if self._current_char() == "n":
@@ -320,32 +328,32 @@ class ZonParser:
 
         if self._current_char() != '"':
             raise ValueError(
-                f"Unterminated string at line {self.line}, column {self.col}"
+                f"Unterminated string at line {self._line}, column {self._col}"
             )
 
         self._next_char()  # Skip the closing quote
         return result
 
     def _parse_number(self) -> Union[int, float]:
-        start = self.pos
+        start = self._pos
 
         # Handle hex numbers
         if (
             self._current_char() == "0"
-            and self.pos + 1 < len(self.content)
-            and self.content[self.pos + 1].lower() == "x"
+            and self._pos + 1 < len(self._content)
+            and self._content[self._pos + 1].lower() == "x"
         ):
             self._next_char()  # Skip 0
             self._next_char()  # Skip x
 
-            hex_start = self.pos
-            while self.pos < len(self.content) and (
+            hex_start = self._pos
+            while self._pos < len(self._content) and (
                 self._current_char().isdigit()
                 or self._current_char().lower() in "abcdef"
             ):
                 self._next_char()
 
-            hex_str = self.content[hex_start : self.pos]
+            hex_str = self._content[hex_start : self._pos]
             return int(hex_str, 16)
 
         # Regular number
@@ -356,7 +364,7 @@ class ZonParser:
             self._next_char()
 
         # Handle digits before decimal point
-        while self.pos < len(self.content) and self._current_char().isdigit():
+        while self._pos < len(self._content) and self._current_char().isdigit():
             self._next_char()
 
         # Handle decimal point
@@ -365,7 +373,7 @@ class ZonParser:
             self._next_char()
 
             # Handle digits after decimal point
-            while self.pos < len(self.content) and self._current_char().isdigit():
+            while self._pos < len(self._content) and self._current_char().isdigit():
                 self._next_char()
 
         # Handle exponent
@@ -378,10 +386,10 @@ class ZonParser:
                 self._next_char()
 
             # Handle exponent digits
-            while self.pos < len(self.content) and self._current_char().isdigit():
+            while self._pos < len(self._content) and self._current_char().isdigit():
                 self._next_char()
 
-        num_str = self.content[start : self.pos]
+        num_str = self._content[start : self._pos]
 
         if is_float:
             return float(num_str)
@@ -389,15 +397,15 @@ class ZonParser:
             return int(num_str)
 
     def _parse_boolean(self) -> bool:
-        if self.content[self.pos : self.pos + 4] == "true":
-            self.pos += 4
+        if self._content[self._pos : self._pos + 4] == "true":
+            self._pos += 4
             return True
-        elif self.content[self.pos : self.pos + 5] == "false":
-            self.pos += 5
+        elif self._content[self._pos : self._pos + 5] == "false":
+            self._pos += 5
             return False
         else:
             raise ValueError(
-                f"Expected 'true' or 'false' at line {self.line}, column {self.col}"
+                f"Expected 'true' or 'false' at line {self._line}, column {self._col}"
             )
 
 
