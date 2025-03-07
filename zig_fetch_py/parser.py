@@ -78,13 +78,9 @@ class ZonParser:
         if char == ".":
             self._next_char()  # Skip the dot
 
-            # Check if it's an object
+            # Check if it's an object or tuple
             if self._current_char() == "{":
                 return self._parse_object()
-
-            # Check if it's an array
-            if self._current_char() == "[":
-                return self._parse_array()
 
             # It's a field name or a special value
             return self._parse_identifier()
@@ -103,11 +99,35 @@ class ZonParser:
                 f"Unexpected character '{char}' at line {self.line}, column {self.col}"
             )
 
-    def _parse_object(self) -> Dict[str, Any]:
-        result = {}
-
+    def _parse_object(self) -> Union[Dict[str, Any], List[Any]]:
+        """Parse a ZON object (anonymous struct) or tuple."""
         # Skip the opening brace
         self._next_char()
+
+        # Check if it's a tuple (values separated by commas without keys)
+        is_tuple = False
+        pos_before_check = self.pos
+        line_before_check = self.line
+        col_before_check = self.col
+
+        # Look ahead to see if this is a tuple
+        self._skip_whitespace_and_comments()
+        if self._current_char() != ".":
+            # If it doesn't start with a dot for a key, it might be a tuple
+            # or an empty object
+            if self._current_char() != "}":
+                is_tuple = True
+
+        # Reset position after look-ahead
+        self.pos = pos_before_check
+        self.line = line_before_check
+        self.col = col_before_check
+
+        if is_tuple:
+            return self._parse_tuple()
+
+        # Regular object parsing
+        result = {}
 
         while True:
             self._skip_whitespace_and_comments()
@@ -151,32 +171,44 @@ class ZonParser:
 
         return result
 
-    def _parse_array(self) -> List[Any]:
+    def _parse_tuple(self) -> List[Any]:
+        """Parse a tuple in ZON format."""
         result = []
-
-        # Skip the opening bracket
-        self._next_char()
 
         while True:
             self._skip_whitespace_and_comments()
 
-            # Check for closing bracket
-            if self._current_char() == "]":
+            # Check for closing brace
+            if self._current_char() == "}":
                 self._next_char()
                 break
 
-            # Parse value
-            value = self._parse_value()
-            result.append(value)
+            # Check for nested tuple or object with dot prefix
+            if self._current_char() == ".":
+                self._next_char()  # Skip the dot
+
+                # Check if it's a nested object or tuple
+                if self._current_char() == "{":
+                    value = self._parse_object()
+                    result.append(value)
+                else:
+                    # It's a field name or a special value
+                    self.pos -= 1  # Move back to include the dot
+                    value = self._parse_value()
+                    result.append(value)
+            else:
+                # Regular value
+                value = self._parse_value()
+                result.append(value)
 
             self._skip_whitespace_and_comments()
 
             # Check for comma
             if self._current_char() == ",":
                 self._next_char()
-            elif self._current_char() != "]":
+            elif self._current_char() != "}":
                 raise ValueError(
-                    f"Expected ',' or ']' at line {self.line}, column {self.col}"
+                    f"Expected ',' or '}}' at line {self.line}, column {self.col}"
                 )
 
         return result

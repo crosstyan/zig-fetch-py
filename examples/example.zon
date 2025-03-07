@@ -7,5 +7,5 @@
             .hash = "abcdef123456",
         },
     },
-    .tags = .["tag1", "tag2"],
+    .tags = .{ "tag1", "tag2" },
 }

@@ -1,0 +1,6 @@
+.{
+    .simple_tuple = .{ 1, 2, 3 },
+    .string_tuple = .{ "one", "two", "three" },
+    .empty_tuple = .{""},
+    .mixed_tuple = .{ 1, "two", true },
+}

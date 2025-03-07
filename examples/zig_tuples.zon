@@ -1,0 +1,22 @@
+.{
+    // Object with field values
+    .metadata = .{
+        .name = "example",
+        .version = "1.0.0",
+    },
+
+    // Tuples of different types
+    .numbers = .{ 1, 2, 3 },
+    .strings = .{ "one", "two", "three" },
+    .mixed = .{ 1, "two", true, null },
+    .empty_string = .{""},
+
+    // Nested structures
+    .nested = .{
+        .tuple_in_object = .{ 4, 5, 6 },
+        .object_in_tuple = .{ .{ .x = 1, .y = 2 }, .{ .x = 3, .y = 4 } },
+    },
+
+    // Empty tuple
+    .empty = .{},
+}

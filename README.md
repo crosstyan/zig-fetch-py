@@ -92,11 +92,13 @@ pytest --cov=zig_fetch_py --cov-report=html
 
 Zig Object Notation (ZON) is a data format used by the Zig programming language. It's similar to JSON but with some differences in syntax:
 
-- Objects are defined with `.{ ... }`
+- Objects (anonymous structs) are defined with `.{ .key = value, ... }`
 - Keys are prefixed with a dot: `.key = value`
-- Arrays are defined with `.[ ... ]`
+- Tuples are defined with `.{value1, value2, ...}` and are parsed as arrays in JSON
 - Special identifiers can be quoted with `@`: `.@"special-name" = value`
 - Comments use `//` syntax
+
+Note: ZON doesn't have a dedicated array syntax like JSON's `[]`. Instead, tuples (`.{value1, value2, ...}`) serve a similar purpose and are converted to arrays in JSON.
 
 Example:
 
@@ -110,7 +112,8 @@ Example:
             .hash = "abcdef123456",
         },
     },
-    .tags = .["tag1", "tag2"],
+    .tags = .{1, 2, 3},     // Tuple (parsed as array in JSON)
+    .paths = .{""},         // Single-item tuple
 }
 ```
 

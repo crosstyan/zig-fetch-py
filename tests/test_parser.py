@@ -151,6 +151,24 @@ class TestZonParser:
             )
             parser.parse()
 
+    def test_parse_tuple(self):
+        """Test parsing tuples."""
+        parser = ZonParser(
+            """.{
+            .simple_tuple = .{1, 2, 3},
+            .string_tuple = .{"one", "two", "three"},
+            .empty_tuple = .{""},
+            .mixed_tuple = .{1, "two", true},
+        }"""
+        )
+        result = parser.parse()
+        assert result == {
+            "simple_tuple": [1, 2, 3],
+            "string_tuple": ["one", "two", "three"],
+            "empty_tuple": [""],
+            "mixed_tuple": [1, "two", True],
+        }
+
 
 class TestZonFileParser:
     """Test cases for the file parsing functions."""
