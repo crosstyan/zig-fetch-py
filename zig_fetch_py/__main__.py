@@ -88,15 +88,28 @@ def cli(ctx: click.Context, verbose: bool):
 
 @cli.command()
 @click.argument("zon_file", type=click.Path(exists=True, readable=True, path_type=Path))
+@click.option(
+    "--recursive",
+    "-r",
+    is_flag=True,
+    help="Recursively process dependencies from downloaded artifacts or scan directories",
+)
 @click.pass_context
-def download(ctx: click.Context, zon_file: Path):
+def download(ctx: click.Context, zon_file: Path, recursive: bool):
     """
-    Download dependencies from a ZON file.
+    Download dependencies from a ZON file or directory.
 
-    ZON_FILE: Path to the ZON file
+    If ZON_FILE is a directory, all build.zig.zon files will be processed.
+    If --recursive is specified, all dependencies of dependencies will also be processed.
+
+    ZON_FILE: Path to the ZON file or directory to process
     """
     logger.info(f"Processing dependencies from {zon_file}")
-    dependencies = process_dependencies(str(zon_file))
+
+    if zon_file.is_dir():
+        logger.info(f"{zon_file} is a directory, searching for build.zig.zon files")
+
+    dependencies = process_dependencies(str(zon_file), recursive=recursive)
 
     if dependencies:
         logger.info(f"Successfully processed {len(dependencies)} dependencies:")

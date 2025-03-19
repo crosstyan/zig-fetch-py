@@ -5,10 +5,12 @@ This module handles downloading and extracting dependencies specified in ZON fil
 """
 
 import shutil
+import click
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Set, List
 
 import httpx
 from loguru import logger
@@ -133,18 +135,85 @@ def process_dependency(
             return None
 
 
-def process_dependencies(zon_file_path: str) -> Dict[str, Path]:
+def find_build_zig_zon_files(directory: Path) -> List[Path]:
+    """
+    Find all build.zig.zon files in a directory and its subdirectories.
+
+    Args:
+        directory: Directory to search in
+
+    Returns:
+        List of paths to build.zig.zon files
+    """
+    logger.debug(f"Searching for build.zig.zon files in {directory}")
+
+    zon_files = []
+    for zon_file in directory.glob("**/build.zig.zon"):
+        logger.debug(f"Found build.zig.zon file: {zon_file}")
+        zon_files.append(zon_file)
+
+    return zon_files
+
+
+def process_dependencies(
+    zon_file_path: str, recursive: bool = False
+) -> Dict[str, Path]:
     """
     Process all dependencies from a ZON file.
 
     Args:
-        zon_file_path: Path to the ZON file
+        zon_file_path: Path to the ZON file or directory
+        recursive: Whether to process dependencies recursively
 
     Returns:
         Dictionary mapping dependency names to their extracted paths
     """
+    # Convert to Path object
+    zon_file = Path(zon_file_path)
+
+    # If the path is a directory, find all build.zig.zon files
+    if zon_file.is_dir():
+        logger.info(f"Processing directory: {zon_file}")
+        all_zon_files = find_build_zig_zon_files(zon_file)
+
+        if not all_zon_files:
+            logger.warning(f"No build.zig.zon files found in {zon_file}")
+            return {}
+
+        # Process all found ZON files
+        result = {}
+        for zon_path in all_zon_files:
+            logger.info(f"Processing {zon_path}")
+            deps = process_dependencies_from_file(str(zon_path), recursive)
+            result.update(deps)
+
+        return result
+
+    # Otherwise, process the single ZON file
+    return process_dependencies_from_file(zon_file_path, recursive)
+
+
+def process_dependencies_from_file(
+    zon_file_path: str, recursive: bool = False
+) -> Dict[str, Path]:
+    """
+    Process all dependencies from a single ZON file.
+
+    Args:
+        zon_file_path: Path to the ZON file
+        recursive: Whether to process dependencies recursively
+
+    Returns:
+        Dictionary mapping dependency names to their extracted paths
+    """
+    logger.info(f"Processing dependencies from file: {zon_file_path}")
+
     # Parse the ZON file
-    zon_data = parse_zon_file(zon_file_path)
+    try:
+        zon_data = parse_zon_file(zon_file_path)
+    except Exception as e:
+        logger.error(f"Error parsing {zon_file_path}: {e}")
+        return {}
 
     # Get the dependencies section
     dependencies = zon_data.get("dependencies", {})
@@ -157,23 +226,79 @@ def process_dependencies(zon_file_path: str) -> Dict[str, Path]:
 
     # Process each dependency
     result = {}
+    processed_paths = set()
+
     for name, dep_info in dependencies.items():
         path = process_dependency(name, dep_info, cache_dir)
         if path:
             result[name] = path
+            processed_paths.add(path)
+
+            # Recursively process dependencies if requested
+            if recursive and path.exists():
+                process_nested_dependencies(path, result, processed_paths)
 
     return result
 
 
-def main(zon_file_path: str) -> None:
+def process_nested_dependencies(
+    dep_path: Path, result: Dict[str, Path], processed_paths: Set[Path]
+) -> None:
+    """
+    Process nested dependencies from a dependency directory.
+
+    Args:
+        dep_path: Path to the dependency directory
+        result: Dictionary to update with new dependencies
+        processed_paths: Set of paths that have already been processed
+    """
+    # Find all build.zig.zon files in the dependency directory
+    zon_files = find_build_zig_zon_files(dep_path)
+
+    if not zon_files:
+        logger.debug(f"No nested build.zig.zon files found in {dep_path}")
+        return
+
+    for zon_file in zon_files:
+        logger.info(f"Processing nested dependency file: {zon_file}")
+
+        # Parse the ZON file
+        try:
+            zon_data = parse_zon_file(str(zon_file))
+        except Exception as e:
+            logger.error(f"Error parsing {zon_file}: {e}")
+            continue
+
+        # Get the dependencies section
+        dependencies = zon_data.get("dependencies", {})
+        if not dependencies:
+            logger.debug(f"No dependencies found in {zon_file}")
+            continue
+
+        # Get the cache directory
+        cache_dir = get_cache_dir()
+
+        # Process each dependency
+        for name, dep_info in dependencies.items():
+            path = process_dependency(name, dep_info, cache_dir)
+            if path and path not in processed_paths:
+                result[name] = path
+                processed_paths.add(path)
+
+                # Recursively process this dependency's dependencies
+                process_nested_dependencies(path, result, processed_paths)
+
+
+def main(zon_file_path: str, recursive: bool = False) -> None:
     """
     Main entry point for the dependency downloader.
 
     Args:
-        zon_file_path: Path to the ZON file
+        zon_file_path: Path to the ZON file or directory
+        recursive: Whether to process dependencies recursively
     """
     logger.info(f"Processing dependencies from {zon_file_path}")
-    dependencies = process_dependencies(zon_file_path)
+    dependencies = process_dependencies(zon_file_path, recursive=recursive)
 
     if dependencies:
         logger.info(f"Successfully processed {len(dependencies)} dependencies:")
@@ -183,11 +308,25 @@ def main(zon_file_path: str) -> None:
         logger.warning("No dependencies were processed")
 
 
+@click.command()
+@click.argument("zon_file", type=click.Path(exists=True, readable=True))
+@click.option(
+    "--recursive",
+    "-r",
+    is_flag=True,
+    help="Recursively process dependencies from downloaded artifacts",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
+def cli(zon_file, recursive, verbose):
+    """Download dependencies from a ZON file."""
+    # Set up logging
+    log_level = "DEBUG" if verbose else "INFO"
+    logger.remove()
+    logger.add(sys.stderr, level=log_level)
+
+    # Run the main function
+    main(zon_file, recursive=recursive)
+
+
 if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) != 2:
-        print(f"Usage: {sys.argv[0]} <zon_file_path>")
-        sys.exit(1)
-
-    main(sys.argv[1])
+    cli()  # pylint: disable=no-value-for-parameter

@@ -7,6 +7,8 @@ A Python utility for working with Zig package manager files and Zig Object Notat
 - Parse ZON files into Python dictionaries
 - Convert ZON files to JSON
 - Download and extract dependencies from ZON files
+- Recursively download nested dependencies
+- Scan directories for `build.zig.zon` files
 
 ## Installation
 
@@ -59,13 +61,27 @@ The package provides a command-line interface with the following commands:
 
 #### Download Dependencies
 
-Download and extract dependencies from a ZON file:
+Download dependencies from a ZON file or directory:
 
 ```bash
-uv run zig-fetch download examples/test.zon
+# Download dependencies from a single ZON file
+zig-fetch download examples/test.zon
+
+# Download dependencies from a directory (finds all build.zig.zon files)
+zig-fetch download lib/
+
+# Download dependencies recursively (finds dependencies of dependencies)
+zig-fetch -v download examples/test.zon --recursive
+
+# Combine directory scanning with recursive downloading
+zig-fetch -v download lib/ --recursive
 ```
 
-This will download all dependencies specified in the ZON file to `~/.cache/zig/p` and extract them to directories named after their hash values.
+Options:
+- `--recursive`, `-r`: Recursively process dependencies of dependencies
+- `--verbose`, `-v`: Enable verbose logging (on the parent command)
+
+This will download all dependencies to `~/.cache/zig/p` and extract them to directories named after their hash values.
 
 #### Convert ZON to JSON
 
