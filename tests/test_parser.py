@@ -5,7 +5,7 @@ Unit tests for the ZON parser.
 import json
 import pytest
 
-from zig_fetch_py.parser import ZonParser, parse_zon_file, zon_to_json
+from zig_fetch_py.parser import ZonParser, dump_zon, parse_zon_file, zon_to_json
 
 
 class TestZonParser:
@@ -129,6 +129,45 @@ class TestZonParser:
         )
         result = parser.parse()
         assert result == {"escaped": "Line 1\nLine 2\tTabbed\r\n"}
+
+    def test_parse_multiline_string(self):
+        parser = ZonParser(
+            """.{
+            .note =
+            \\\\Increase cadence gradually until 90-95rmp.
+            \\\\Increase power gradually until 160W.
+            ,
+        }"""
+        )
+        result = parser.parse()
+        assert result == {
+            "note": "Increase cadence gradually until 90-95rmp.\nIncrease power gradually until 160W."
+        }
+
+    def test_parse_multiline_string_with_empty_line(self):
+        parser = ZonParser(
+            """.{
+            .note =
+            \\\\Line 1
+            \\\\
+            \\\\Line 3
+            ,
+        }"""
+        )
+        result = parser.parse()
+        assert result == {"note": "Line 1\n\nLine 3"}
+
+    def test_parse_multiline_string_error_invalid_continuation(self):
+        with pytest.raises(ValueError):
+            parser = ZonParser(
+                """.{
+                .note =
+                \\\\Line 1
+                Line 2
+                ,
+            }"""
+            )
+            parser.parse()
 
     def test_parse_error_invalid_syntax(self):
         """Test that parser raises an error for invalid syntax."""
@@ -259,3 +298,16 @@ class TestZonFileParser:
         # Parse the file
         result = parse_zon_file(str(zon_file))
         assert result == {"name": "test", "version": "1.0.0"}
+
+
+class TestZonDump:
+    def test_dump_multiline_string(self):
+        data = {"note": "Line 1\nLine 2"}
+        dumped = dump_zon(data)
+        assert dumped == ".{\n    .note =\n    \\\\Line 1\n    \\\\Line 2\n    ,\n}"
+
+    def test_round_trip_multiline_string(self):
+        original = {"note": "Line 1\n\nLine 3", "name": "ok"}
+        dumped = dump_zon(original)
+        reparsed = ZonParser(dumped).parse()
+        assert reparsed == original

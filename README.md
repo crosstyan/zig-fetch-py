@@ -24,15 +24,11 @@ curl -sSf https://astral.sh/uv/install.sh | bash
 git clone https://github.com/yourusername/zig-fetch-py.git
 cd zig-fetch-py
 
-# Create and activate a virtual environment
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Sync project dependencies
+uv sync
 
-# Install the package in development mode
-uv pip install -e .
-
-# Install development dependencies
-uv pip install -e ".[dev]"
+# Include development dependencies
+uv sync --extra dev
 ```
 
 ### Using pip

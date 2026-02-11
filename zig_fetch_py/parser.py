@@ -56,6 +56,12 @@ class ZonParser:
             return char
         return ""
 
+    def _peek_char(self, offset: int = 1) -> str:
+        pos = self._pos + offset
+        if pos >= len(self._content):
+            return ""
+        return self._content[pos]
+
     def _skip_whitespace_and_comments(self):
         while self._pos < len(self._content):
             char = self._current_char()
@@ -96,6 +102,8 @@ class ZonParser:
 
         elif char == '"':
             return self._parse_string()
+        elif char == "\\" and self._peek_char() == "\\":
+            return self._parse_multiline_string()
         elif char.isdigit() or char == "-":
             return self._parse_number()
         elif char == "t" or char == "f":
@@ -333,6 +341,26 @@ class ZonParser:
         self._next_char()  # Skip the closing quote
         return result
 
+    def _parse_multiline_string(self) -> str:
+        lines: List[str] = []
+
+        while self._current_char() == "\\" and self._peek_char() == "\\":
+            self._next_char()  # Skip first backslash
+            self._next_char()  # Skip second backslash
+
+            start = self._pos
+            while self._pos < len(self._content) and self._current_char() != "\n":
+                self._next_char()
+
+            lines.append(self._content[start : self._pos])
+
+            if self._current_char() == "\n":
+                self._next_char()
+
+            self._skip_whitespace_and_comments()
+
+        return "\n".join(lines)
+
     def _parse_number(self) -> Union[int, float]:
         start = self._pos
 
@@ -408,6 +436,58 @@ class ZonParser:
             )
 
 
+def _dump_value(value: Any, indent: int = 0) -> str:
+    indent_str = " " * indent
+    next_indent = indent + 4
+    next_indent_str = " " * next_indent
+
+    if isinstance(value, dict):
+        if not value:
+            return ".{}"
+
+        lines = [".{"]
+        for key, item in value.items():
+            if isinstance(item, str) and "\n" in item:
+                lines.append(f"{next_indent_str}.{key} =")
+                for part in item.split("\n"):
+                    lines.append(f"{next_indent_str}\\\\{part}")
+                lines.append(f"{next_indent_str},")
+            else:
+                dumped = _dump_value(item, next_indent)
+                lines.append(f"{next_indent_str}.{key} = {dumped},")
+        lines.append(f"{indent_str}}}")
+        return "\n".join(lines)
+
+    if isinstance(value, list):
+        if not value:
+            return ".{}"
+        items = ", ".join(_dump_value(item, indent) for item in value)
+        return f".{{{items}}}"
+
+    if isinstance(value, str):
+        escaped = (
+            value.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+            .replace("\r", "\\r")
+        )
+        return f'"{escaped}"'
+
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if value is None:
+        return "null"
+
+    return str(value)
+
+
+def dump_zon(value: Any) -> str:
+    return _dump_value(value)
+
+
 def parse_zon_file(file_path: str, empty_tuple_as_dict: bool = False) -> Dict[str, Any]:
     """
     Parse a ZON file and return a Python dictionary.
@@ -426,7 +506,7 @@ def parse_zon_file(file_path: str, empty_tuple_as_dict: bool = False) -> Dict[st
 
     parser = ZonParser(content, empty_tuple_as_dict=empty_tuple_as_dict)
     result = parser.parse()
-    logger.debug(f"Successfully parsed ZON file")
+    logger.debug("Successfully parsed ZON file")
     return result
 
 
