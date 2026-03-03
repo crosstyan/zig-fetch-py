@@ -5,12 +5,15 @@ This module handles downloading and extracting dependencies specified in ZON fil
 """
 
 import shutil
+import os
 import click
 import sys
+import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, Set, List
+from urllib.parse import urldefrag
 
 import httpx
 from loguru import logger
@@ -54,6 +57,66 @@ def download_file(url: str, target_path: Path) -> None:
                     f.write(chunk)
 
 
+def is_git_dependency_url(url: str) -> bool:
+    if not url:
+        return False
+
+    return url.startswith("git+")
+
+
+def split_git_dependency_url(url: str) -> tuple[str, Optional[str]]:
+    repo_with_scheme = url[4:] if url.startswith("git+") else url
+    repo_url, ref = urldefrag(repo_with_scheme)
+    return repo_url, ref or None
+
+
+def _build_git_env() -> Dict[str, str]:
+    env = os.environ.copy()
+
+    http_proxy = env.get("HTTP_PROXY") or env.get("http_proxy")
+    https_proxy = env.get("HTTPS_PROXY") or env.get("https_proxy")
+    all_proxy = env.get("ALL_PROXY") or env.get("all_proxy")
+
+    if http_proxy and "http_proxy" not in env:
+        env["http_proxy"] = http_proxy
+    if https_proxy and "https_proxy" not in env:
+        env["https_proxy"] = https_proxy
+    if all_proxy and "all_proxy" not in env:
+        env["all_proxy"] = all_proxy
+
+    if http_proxy and "GIT_HTTP_PROXY" not in env:
+        env["GIT_HTTP_PROXY"] = http_proxy
+    if https_proxy and "GIT_HTTPS_PROXY" not in env:
+        env["GIT_HTTPS_PROXY"] = https_proxy
+
+    return env
+
+
+def clone_git_dependency(repo_url: str, target_path: Path, ref: Optional[str] = None) -> None:
+    logger.info(f"Cloning git dependency {repo_url} to {target_path}")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    env = _build_git_env()
+
+    subprocess.run(
+        ["git", "clone", repo_url, str(target_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    if ref:
+        logger.info(f"Checking out ref {ref} in {target_path}")
+        subprocess.run(
+            ["git", "-C", str(target_path), "checkout", ref],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+
 def extract_tarball(tarball_path: Path, extract_dir: Path) -> Path:
     """
     Extract a tarball to a directory.
@@ -82,9 +145,7 @@ def extract_tarball(tarball_path: Path, extract_dir: Path) -> Path:
         return extract_dir / common_prefix if common_prefix else extract_dir
 
 
-def process_dependency(
-    name: str, dep_info: Dict[str, Any], cache_dir: Path
-) -> Optional[Path]:
+def process_dependency(name: str, dep_info: Dict[str, Any], cache_dir: Path) -> Optional[Path]:
     """
     Process a single dependency from a ZON file.
 
@@ -106,21 +167,30 @@ def process_dependency(
     # Check if the dependency is already cached
     target_dir = cache_dir / hash_value
     if target_dir.exists():
-        logger.info(
-            f"Dependency {name} ({hash_value}) is already cached at {target_dir}"
-        )
+        logger.info(f"Dependency {name} ({hash_value}) is already cached at {target_dir}")
         return target_dir
 
     # Create a temporary directory for downloading and extracting
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
 
-        # Download the tarball
-        tarball_path = temp_dir_path / f"{name}.tar.gz"
-        download_file(url, tarball_path)
+        if is_git_dependency_url(url):
+            repo_url, git_ref = split_git_dependency_url(url)
+            extract_path = temp_dir_path / name
+            try:
+                clone_git_dependency(repo_url, extract_path, git_ref)
+            except subprocess.CalledProcessError as e:
+                logger.error(
+                    f"Failed to clone git dependency {name}: {e.stderr.strip() if e.stderr else e}"
+                )
+                return None
+        else:
+            # Download the tarball
+            tarball_path = temp_dir_path / f"{name}.tar.gz"
+            download_file(url, tarball_path)
 
-        # Extract the tarball to a temporary directory
-        extract_path = extract_tarball(tarball_path, temp_dir_path / "extract")
+            # Extract the tarball to a temporary directory
+            extract_path = extract_tarball(tarball_path, temp_dir_path / "extract")
 
         # Move the extracted directory to the cache directory with the hash as the name
         if extract_path and extract_path.exists():
@@ -131,7 +201,7 @@ def process_dependency(
             logger.info(f"Dependency {name} ({hash_value}) cached at {target_dir}")
             return target_dir
         else:
-            logger.error(f"Failed to extract {name} from {tarball_path}")
+            logger.error(f"Failed to cache dependency {name} from {url}")
             return None
 
 
@@ -155,9 +225,7 @@ def find_build_zig_zon_files(directory: Path) -> List[Path]:
     return zon_files
 
 
-def process_dependencies(
-    zon_file_path: str, recursive: bool = False
-) -> Dict[str, Path]:
+def process_dependencies(zon_file_path: str, recursive: bool = False) -> Dict[str, Path]:
     """
     Process all dependencies from a ZON file.
 
@@ -193,9 +261,7 @@ def process_dependencies(
     return process_dependencies_from_file(zon_file_path, recursive)
 
 
-def process_dependencies_from_file(
-    zon_file_path: str, recursive: bool = False
-) -> Dict[str, Path]:
+def process_dependencies_from_file(zon_file_path: str, recursive: bool = False) -> Dict[str, Path]:
     """
     Process all dependencies from a single ZON file.
 
